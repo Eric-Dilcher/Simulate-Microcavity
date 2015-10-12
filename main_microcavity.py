@@ -4,16 +4,16 @@ Created on Thu Jul 18 16:15:06 2013
 
 @author: Eric Dilcher
 
-This code relies on the transfer matrix theory laid out in "Introduction to Optics" by Pedrotti, specifically section 22.1
+This code relies on the transfer matrix theory (see "Introduction to Optics" by Pedrotti)
 to characterize the reflective and transmissive properties of multilayer films.
 
 Any types, number of, thicknesses of films can be analyzed by entering the characteristics of the film in the config file.
 
-There is a config file 'config.ini' where the user is to enter the parameters of the layers.
+There is a config file 'config.ini' where the user is to enter the parameters of the simulation.
 If the user would like to expand the allowable materials, update the Material_Dictionary below.  In addition
 update the comments in config.ini, and configspec.ini
 
-Note:  the package "configobj" may need to be installed before this code can be written
+Note:  the package "configobj" needs to be installed before this code can be written
 """
 
 from scipy import matrix
@@ -23,71 +23,13 @@ import read_config as init
 from Layer import Layer
 
 #--------------------------------------------------------------#    
-#below are the functions used to help with the analysis
+# Functions
 
-#function to populate a list of layer objects
 def create_layer_objs(param_dict):
     layers_objs = []
     for layer, thick in zip(param_dict["layer_list"], param_dict["thickness_list"]):
         layers_objs.append(Layer(layer, thick, param_dict))
     return layers_objs
-
-#function to update all layers to take into account various input wavelengths
-def update_all_layers(wavelen, param_dict):
-    for layer in layer_objs:
-        layer.refresh_values(wavelen, param_dict)
-
-#function to find a system matrix
-def find_sysmat_perp(layer_objs):
-    sysmat = matrix([[1.0,0], [0,1.0]])
-    for layer in layer_objs:
-        sysmat = sysmat*layer.tmatrix_perp
-    return sysmat
-    
-def find_sysmat_para(layer_objs):
-    sysmat = matrix([[1.0,0], [0,1.0]])
-    for layer in layer_objs:
-        sysmat = sysmat*layer.tmatrix_para
-    return sysmat
-    
-#function to find the transmission coefficient of a stack of layers
-def find_transmission_perp(medium, substrate, sysmat_perp):
-    g_0 = medium.gamma_perp
-    g_s = substrate.gamma_perp
-    return 2*g_0/(g_0*sysmat_perp[0,0]+g_0*g_s*sysmat_perp[0,1]+sysmat_perp[1,0]+g_s*sysmat_perp[1,1])
-    
-def find_transmission_para(medium, substrate, sysmat_para):
-    g_0 = medium.gamma_para
-    g_s = substrate.gamma_para
-    return 2*g_0/(g_0*sysmat_para[0,0]+g_0*g_s*sysmat_para[0,1]+sysmat_para[1,0]+g_s*sysmat_para[1,1])
-#function to find the reflection coefficient of a stack of layers
-def find_reflection_perp(medium, substrate, sysmat_perp):
-    g_0 = medium.gamma_perp
-    g_s = substrate.gamma_perp
-    return (g_0*sysmat_perp[0,0]+g_0*g_s*sysmat_perp[0,1]-sysmat_perp[1,0]-g_s*sysmat_perp[1,1])/(g_0*sysmat_perp[0,0]+g_0*g_s*sysmat_perp[0,1]+sysmat_perp[1,0]+g_s*sysmat_perp[1,1])
-
-def find_reflection_para(medium, substrate, sysmat_para):
-    g_0 = medium.gamma_para
-    g_s = substrate.gamma_para
-    return (g_0*sysmat_para[0,0]+g_0*g_s*sysmat_para[0,1]-sysmat_para[1,0]-g_s*sysmat_para[1,1])/(g_0*sysmat_para[0,0]+g_0*g_s*sysmat_para[0,1]+sysmat_para[1,0]+g_s*sysmat_para[1,1])
-
-def calc_trans_refl_at_wavelen_perpendicular(wavelen, medium, substrate, layer_objs):
-    sysmat = find_sysmat_perp(layer_objs)#recalculate the system matrix
-    t = find_transmission_perp(medium, substrate, sysmat)#recalculate the transmission coefficient
-    T=(abs(t)**2)*100#recalculate the transmission amplitude in percent
-    r = find_reflection_perp(medium, substrate, sysmat)#recalculate the reflection coefficient
-    R = (abs(r)**2)*100#recalculate the reflection amplitude in percent
-    return (T,R)
-
-def calc_trans_refl_at_wavelen_parallel(wavelen, medium, substrate, layer_objs):
-    sysmat = find_sysmat_para(layer_objs)#recalculate the system matrix
-    t = find_transmission_para(medium, substrate, sysmat)#recalculate the transmission coefficient
-    T=(abs(t)**2)*100#recalculate the transmission amplitude in percent
-    r = find_reflection_para(medium, substrate, sysmat)#recalculate the reflection coefficient
-    R = (abs(r)**2)*100#recalculate the reflection amplitude in percent
-    return (T,R)
-
-     
 
 def calculate(param_dictionary, medium, substrate, layer_objs):
     start = param_dictionary["lambda_start"]
@@ -99,36 +41,98 @@ def calculate(param_dictionary, medium, substrate, layer_objs):
     transm_coeff = []
     refl_coeff = []
 
-    for i in lambda_values:
-        update_all_layers(i, param_dictionary)#recalculate the values taking into account the changed wavelength
+    for wavelen in lambda_values:
+        update_all_layers(wavelen, param_dictionary, layer_objs)#recalculate the values taking into account the changed wavelength
         if polarization == -1:
-            T_perp, R_perp = calc_trans_refl_at_wavelen_perpendicular(i, medium, substrate, layer_objs)
-            T_para, R_para = calc_trans_refl_at_wavelen_parallel(i, medium, substrate, layer_objs)
+            T_perp, R_perp = calc_trans_refl_at_wavelen_perp(wavelen, medium, substrate, layer_objs)
+            T_para, R_para = calc_trans_refl_at_wavelen_para(wavelen, medium, substrate, layer_objs)
             transm_coeff.append(np.average([T_perp, T_para]))
             refl_coeff.append(np.average([R_perp, R_para]))
         elif polarization == 0:
-            T, R = calc_trans_refl_at_wavelen_perpendicular(i, medium, substrate, layer_objs)
+            T, R = calc_trans_refl_at_wavelen_perp(wavelen, medium, substrate, layer_objs)
             transm_coeff.append(T)
             refl_coeff.append(R)
         else:
-            T, R = calc_trans_refl_at_wavelen_parallel(i, medium, substrate, layer_objs)
+            T, R = calc_trans_refl_at_wavelen_para(wavelen, medium, substrate, layer_objs)
             transm_coeff.append(T)
             refl_coeff.append(R)
     
     #transform to numpy arrays
     transm_coeff = np.array(transm_coeff)
     refl_coeff = np.array(refl_coeff)
-    #return tuple of arrays
     return (lambda_values, transm_coeff, refl_coeff)
 
-def write_file(param_dictionary, wavelen, transmission, reflection, filename = ""):
-    polarization_dict = {-1: "Unpolarized", 0: "Perpendicular", 1: "Parallel"}
-    wavelen, transmission, reflection = np.array(wavelen), np.array(transmission), np.array(reflection)
-    data = np.c_[wavelen, transmission, reflection]
+#update all the layer values taking into account the changed wavelength
+def update_all_layers(wavelen, param_dict, layer_objs):
+    for layer in layer_objs:
+        layer.refresh_values(wavelen, param_dict)
+
+#--------------------------------------------------------------#    
+# Perpendicular polarization specific functions
+
+def calc_trans_refl_at_wavelen_perp(wavelen, medium, substrate, layer_objs):
+    sysmat = calc_sysmat_perp(layer_objs)#recalculate the system matrix
+    t = calc_transmission_perp(medium, substrate, sysmat)#recalculate the transmission coefficient
+    T=(np.abs(t)**2)*100#recalculate the transmission amplitude in percent
+    r = calc_reflection_perp(medium, substrate, sysmat)#recalculate the reflection coefficient
+    R = (np.abs(r)**2)*100#recalculate the reflection amplitude in percent
+    return (T,R)
     
-    start = param_dictionary["lambda_start"] #initialize the loop variable at the start wavelength
-    end = param_dictionary["lambda_end"] #define the end wavelength
-    increment = (1.0*end - start)/param_dictionary["num_points"] #define the incremen between wavelengths
+#calculate the system matrix
+def calc_sysmat_perp(layer_objs):
+    sysmat = matrix([[1.0, 0], [0, 1.0]])
+    for layer in layer_objs:
+        sysmat = sysmat*layer.tmatrix_perp
+    return sysmat
+
+#function to find the transmission coefficient of a stack of layers
+def calc_transmission_perp(medium, substrate, sysmat_perp):
+    g_0 = medium.gamma_perp
+    g_s = substrate.gamma_perp
+    return 2*g_0/(g_0*sysmat_perp[0,0]+g_0*g_s*sysmat_perp[0,1]+sysmat_perp[1,0]+g_s*sysmat_perp[1,1])
+
+#function to find the reflection coefficient of a stack of layers
+def calc_reflection_perp(medium, substrate, sysmat_perp):
+    g_0 = medium.gamma_perp
+    g_s = substrate.gamma_perp
+    return (g_0*sysmat_perp[0,0]+g_0*g_s*sysmat_perp[0,1]-sysmat_perp[1,0]-g_s*sysmat_perp[1,1])/(g_0*sysmat_perp[0,0]+g_0*g_s*sysmat_perp[0,1]+sysmat_perp[1,0]+g_s*sysmat_perp[1,1])
+
+#--------------------------------------------------------------#    
+# Parallel polarization specific functions
+
+def calc_trans_refl_at_wavelen_para(wavelen, medium, substrate, layer_objs):
+    sysmat = calc_sysmat_para(layer_objs)#recalculate the system matrix
+    t = calc_transmission_para(medium, substrate, sysmat)#recalculate the transmission coefficient
+    T=(np.abs(t)**2)*100#recalculate the transmission amplitude in percent
+    r = calc_reflection_para(medium, substrate, sysmat)#recalculate the reflection coefficient
+    R = (np.abs(r)**2)*100#recalculate the reflection amplitude in percent
+    return (T,R)
+    
+def calc_sysmat_para(layer_objs):
+    sysmat = matrix([[1.0, 0], [0, 1.0]])
+    for layer in layer_objs:
+        sysmat = sysmat*layer.tmatrix_para
+    return sysmat
+    
+def calc_transmission_para(medium, substrate, sysmat_para):
+    g_0 = medium.gamma_para
+    g_s = substrate.gamma_para
+    return 2*g_0/(g_0*sysmat_para[0,0]+g_0*g_s*sysmat_para[0,1]+sysmat_para[1,0]+g_s*sysmat_para[1,1])
+
+def calc_reflection_para(medium, substrate, sysmat_para):
+    g_0 = medium.gamma_para
+    g_s = substrate.gamma_para
+    return (g_0*sysmat_para[0,0]+g_0*g_s*sysmat_para[0,1]-sysmat_para[1,0]-g_s*sysmat_para[1,1])/(g_0*sysmat_para[0,0]+g_0*g_s*sysmat_para[0,1]+sysmat_para[1,0]+g_s*sysmat_para[1,1])
+
+
+def write_file(param_dictionary, wavelens, transmissions, reflections, filename = ""):
+    polarization_dict = {-1: "Unpolarized", 0: "Perpendicular", 1: "Parallel"}
+    wavelens, transmissions, reflections = np.array(wavelens), np.array(transmissions), np.array(reflections)
+    data = np.c_[wavelens, transmissions, reflections] #stack arrays horizontally (3 colums)
+    
+    start = param_dictionary["lambda_start"]
+    end = param_dictionary["lambda_end"]
+    increment = (1.0*end - start)/param_dictionary["num_points"]
     center_wavelen = param_dictionary["lambda_0"]
     polarization = param_dictionary["polarization"]
     

@@ -4,7 +4,7 @@ import read_config as init
 
 RAD_PER_DEG = pi/180
 
-Material_Dictionary = init.material_dictionary
+material_dictionary = init.material_dictionary
 #class to define a layer in a multilayer stack
 class Layer(object):
     def __init__(self, material, thick_frac, param_dict):#Layer class constructor
@@ -13,7 +13,7 @@ class Layer(object):
         #thickness of layer as a fraction of design wavelength
         self.thick_frac = thick_frac
         #index of refraction
-        self.index_r = Material_Dictionary[material]
+        self.index_r = material_dictionary[material]
         self.set_thick(param_dict)
         self.set_theta(param_dict)
         self.set_gamma_perp()
@@ -25,7 +25,7 @@ class Layer(object):
         
     #method to calculate and set the angle of outgoing light using Snell's law
     def set_theta(self, param_dict):
-        self.theta = arcsin((Material_Dictionary[param_dict['medium']]/self.index_r)*sin(RAD_PER_DEG*param_dict['inc_angle']))
+        self.theta = arcsin((material_dictionary[param_dict['medium']]/self.index_r)*sin(RAD_PER_DEG*param_dict['inc_angle']))
         
     #method to calculateand set delta
     def set_delta(self, wlength):
